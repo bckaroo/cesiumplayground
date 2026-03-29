@@ -119,6 +119,10 @@
   <option value="Mount Vernon">Mount Vernon</option>
 </select>
 
+<div id="layer-toggles" style="position:absolute;top:95px;left:10px;z-index:1000;background:rgba(0,0,0,0.85);color:white;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.8;">
+  <label style="cursor:pointer;display:block;"><input type="checkbox" id="toggle-flood" onchange="toggleFlood(this.checked)"> 🌊 Flood Plains</label>
+</div>
+
 <select id="mode-select" onchange="setMode(this.value)">
   <option value="lbcs">🏙️ LBCS Land Use</option>
   <option value="dunkin">🍩 Dunkin' Suitability</option>
@@ -335,6 +339,51 @@ let currentMuni = 'Irvington';
     if (el) { el.innerHTML = '<div style="color:#FF6B6B">Error: ' + err.message + '</div>'; }
   }
 })();
+
+// ============================================================================
+// FLOOD PLAINS LAYER
+// ============================================================================
+const FLOOD_URL = "https://giswww.westchestergov.com/arcgis/rest/services/DataHub_EnvironmentandPlanning/MapServer/157/query?outFields=*&where=1%3D1&f=geojson";
+let floodDataSource = null;
+
+const FLOOD_COLORS = {
+  'A': Cesium.Color.fromCssColorString('#2196F3').withAlpha(0.6),    // 100-year
+  'AE': Cesium.Color.fromCssColorString('#1976D2').withAlpha(0.6),   // 100-year w/ BFE
+  'AO': Cesium.Color.fromCssColorString('#64B5F6').withAlpha(0.5),   // Shallow flooding
+  'VE': Cesium.Color.fromCssColorString('#0D47A1').withAlpha(0.7),   // Coastal
+  'X': Cesium.Color.fromCssColorString('#81C784').withAlpha(0.3),    // Minimal risk
+};
+
+async function toggleFlood(show) {
+  if (show && !floodDataSource) {
+    console.log('Loading flood plains...');
+    try {
+      const resp = await fetch(FLOOD_URL);
+      const data = await resp.json();
+      floodDataSource = await Cesium.GeoJsonDataSource.load(data, {
+        clampToGround: true,
+      });
+      const entities = floodDataSource.entities.values;
+      for (const entity of entities) {
+        if (entity.polygon) {
+          const flood = String(entity.properties?.FLOOD?.getValue() || 'X').trim().toUpperCase();
+          const color = FLOOD_COLORS[flood] || FLOOD_COLORS['X'];
+          entity.polygon.material = color;
+          entity.polygon.outline = true;
+          entity.polygon.outlineColor = color.withAlpha(1.0);
+          entity.polygon.outlineWidth = 1;
+          entity.polygon.classificationType = Cesium.ClassificationType.TERRAIN;
+        }
+      }
+      viewer.dataSources.add(floodDataSource);
+      console.log('Flood plains loaded:', entities.length, 'zones');
+    } catch (e) {
+      console.error('Flood plains load error:', e);
+    }
+  } else if (floodDataSource) {
+    floodDataSource.show = show;
+  }
+}
 
 // ============================================================================
 // MUNICIPALITY SELECTOR
