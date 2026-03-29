@@ -363,11 +363,8 @@ const FLOOD_URL = "https://giswww.westchestergov.com/arcgis/rest/services/DataHu
 let floodDataSource = null;
 
 const FLOOD_COLORS = {
-  'A': Cesium.Color.fromCssColorString('#2196F3').withAlpha(0.6),    // 100-year
-  'AE': Cesium.Color.fromCssColorString('#1976D2').withAlpha(0.6),   // 100-year w/ BFE
-  'AO': Cesium.Color.fromCssColorString('#64B5F6').withAlpha(0.5),   // Shallow flooding
-  'VE': Cesium.Color.fromCssColorString('#0D47A1').withAlpha(0.7),   // Coastal
-  'X': Cesium.Color.fromCssColorString('#81C784').withAlpha(0.3),    // Minimal risk
+  '100': Cesium.Color.fromCssColorString('#2196F3').withAlpha(0.6),   // 100-year flood
+  '500': Cesium.Color.fromCssColorString('#64B5F6').withAlpha(0.4),   // 500-year flood
 };
 
 async function toggleFlood(show) {
@@ -382,8 +379,8 @@ async function toggleFlood(show) {
       const entities = floodDataSource.entities.values;
       for (const entity of entities) {
         if (entity.polygon) {
-          const flood = String(entity.properties?.FLOOD?.getValue() || 'X').trim().toUpperCase();
-          const color = FLOOD_COLORS[flood] || FLOOD_COLORS['X'];
+          const flood = String(entity.properties?.FLOOD?.getValue() || '500').trim();
+          const color = FLOOD_COLORS[flood] || FLOOD_COLORS['500'];
           entity.polygon.material = color;
           entity.polygon.outline = true;
           entity.polygon.outlineColor = color.withAlpha(1.0);
