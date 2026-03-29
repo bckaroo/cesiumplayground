@@ -264,7 +264,7 @@ let currentMuni = 'Irvington';
   });
 
   // Dark background
-  viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#1a1a2e');
+  viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#e0e0e0');
 
   // Add Google 3D Tiles (50% transparent)
   try {
@@ -285,7 +285,7 @@ let currentMuni = 'Irvington';
     const globe = new Cesium.Globe(viewer.scene.ellipsoid);
     globe.terrainProvider = terrainProvider;
     globe.showGroundAtmosphere = false;
-    globe.baseColor = Cesium.Color.fromCssColorString('#2a2a3e');
+    globe.baseColor = Cesium.Color.fromCssColorString('#e0e0e0');
     viewer.scene.globe = globe;
     viewer.scene.globe.show = true;
     console.log('Terrain loaded');
