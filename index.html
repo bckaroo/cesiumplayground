@@ -57,6 +57,15 @@
   }
   #mode-toggle:hover { background: rgba(50,50,50,0.9); }
   
+  /* Filter selector */
+  #filter-select {
+    position: absolute; top: 60px; left: 310px; z-index: 1000;
+    background: rgba(0,0,0,0.85); color: white; border: 1px solid #555;
+    border-radius: 6px; padding: 8px 12px; font-size: 13px;
+    outline: none; cursor: pointer;
+  }
+  #filter-select option { background: #222; }
+  
   /* Loading overlay */
   #loading {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -102,6 +111,18 @@
 </select>
 
 <button id="mode-toggle" onclick="toggleMode()">🍩 Dunkin' Mode</button>
+<select id="filter-select" onchange="applyFilter(this.value)">
+  <option value="none">🎨 No Filter</option>
+  <option value="noir">🖤 Noir</option>
+  <option value="blueprint">📘 Blueprint</option>
+  <option value="sepia">📜 Sepia</option>
+  <option value="neon">💜 Neon Night</option>
+  <option value="xray">☢️ X-Ray</option>
+  <option value="warmth">🔥 Warmth</option>
+  <option value="cool">🧊 Cool Tone</option>
+  <option value="highcontrast">⚡ High Contrast</option>
+  <option value="desaturated">🌫️ Muted</option>
+</select>
 
 <div id="cesiumContainer"></div>
 
@@ -325,8 +346,147 @@ function flyToMuni(muni) {
 }
 
 // ============================================================================
-// DUNKIN' MODE TOGGLE
+// STYLE FILTERS
 // ============================================================================
+let currentFilterStage = null;
+
+const FILTERS = {
+  none: null,
+  noir: new Cesium.PostProcessStage({
+    name: 'noir',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        g = smoothstep(0.1, 0.9, g);  // boost contrast
+        out_FragColor = vec4(vec3(g), c.a);
+      }
+    `,
+  }),
+  blueprint: new Cesium.PostProcessStage({
+    name: 'blueprint',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 blue = vec3(0.05, 0.12, 0.3) + vec3(g) * vec3(0.3, 0.5, 0.9);
+        out_FragColor = vec4(blue, c.a);
+      }
+    `,
+  }),
+  sepia: new Cesium.PostProcessStage({
+    name: 'sepia',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 sepia = vec3(g * 1.2, g * 1.0, g * 0.8);
+        out_FragColor = vec4(sepia, c.a);
+      }
+    `,
+  }),
+  neon: new Cesium.PostProcessStage({
+    name: 'neon',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        // Darken + boost saturation
+        vec3 dark = c.rgb * 0.4;
+        float lum = dot(dark, vec3(0.299, 0.587, 0.114));
+        vec3 sat = mix(vec3(lum), dark, 2.0);
+        // Slight purple tint
+        sat += vec3(0.05, 0.0, 0.1);
+        out_FragColor = vec4(clamp(sat, 0.0, 1.0), c.a);
+      }
+    `,
+  }),
+  xray: new Cesium.PostProcessStage({
+    name: 'xray',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        float inv = 1.0 - g;
+        vec3 xray = vec3(inv * 0.1, inv * 0.4, inv * 0.9);
+        out_FragColor = vec4(xray, c.a);
+      }
+    `,
+  }),
+  warmth: new Cesium.PostProcessStage({
+    name: 'warmth',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        vec3 warm = c.rgb * vec3(1.15, 1.05, 0.9);
+        out_FragColor = vec4(clamp(warm, 0.0, 1.0), c.a);
+      }
+    `,
+  }),
+  cool: new Cesium.PostProcessStage({
+    name: 'cool',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        vec3 cool = c.rgb * vec3(0.85, 0.95, 1.15);
+        out_FragColor = vec4(clamp(cool, 0.0, 1.0), c.a);
+      }
+    `,
+  }),
+  highcontrast: new Cesium.PostProcessStage({
+    name: 'highcontrast',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        vec3 hc = (c.rgb - 0.5) * 1.8 + 0.5;
+        out_FragColor = vec4(clamp(hc, 0.0, 1.0), c.a);
+      }
+    `,
+  }),
+  desaturated: new Cesium.PostProcessStage({
+    name: 'desaturated',
+    fragmentShader: `
+      uniform sampler2D colorTexture;
+      in vec2 v_textureCoordinates;
+      void main() {
+        vec4 c = texture(colorTexture, v_textureCoordinates);
+        float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 muted = mix(vec3(g), c.rgb, 0.3);
+        out_FragColor = vec4(muted, c.a);
+      }
+    `,
+  }),
+};
+
+function applyFilter(filterName) {
+  // Remove current filter
+  if (currentFilterStage) {
+    viewer.scene.postProcessStages.remove(currentFilterStage);
+    currentFilterStage = null;
+  }
+  // Apply new filter
+  const stage = FILTERS[filterName];
+  if (stage) {
+    currentFilterStage = stage;
+    viewer.scene.postProcessStages.add(stage);
+  }
+  console.log('Filter applied:', filterName);
+}
 function toggleMode() {
   dunkinMode = !dunkinMode;
   const btn = document.getElementById('mode-toggle');
