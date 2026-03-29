@@ -453,7 +453,13 @@ async function loadParcels(muni) {
         entity.polygon.extrudedHeight = undefined;
         
         if (dunkinMode && score >= 70) {
-          entity.polygon.extrudedHeight = 3;
+          // Prime sites: thicker outline + brighter hatching, but still draped
+          entity.polygon.material = new Cesium.StripeMaterialProperty({
+            evenColor: Cesium.Color.RED.withAlpha(0.25),
+            oddColor: Cesium.Color.TRANSPARENT,
+            repeat: 6,
+            orientation: Cesium.StripeOrientation.DIAGONAL,
+          });
         }
       }
     }
