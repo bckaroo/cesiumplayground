@@ -222,6 +222,13 @@ let currentMuni = 'Irvington';
 // INIT
 // ============================================================================
 (async function init() {
+  // Always hide loading after 5 seconds no matter what
+  const loadingTimeout = setTimeout(() => {
+    const el = document.getElementById('loading');
+    if (el) { el.style.opacity = '0'; setTimeout(() => el.style.display = 'none', 500); }
+  }, 5000);
+
+  try {
   viewer = new Cesium.Viewer('cesiumContainer', {
     globe: false,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
@@ -238,7 +245,6 @@ let currentMuni = 'Irvington';
   // Add Google 3D Tiles
   try {
     const tileset = await Cesium.createGooglePhotorealistic3DTileset();
-    // 50% transparent so greyscale base shows through
     tileset.style = new Cesium.Cesium3DTileStyle({
       color: "color('white', 0.5)"
     });
@@ -248,7 +254,7 @@ let currentMuni = 'Irvington';
     console.error('Failed to load 3D Tiles:', error);
   }
 
-  // Greyscale base: B&W imagery underneath 3D tiles
+  // Greyscale base: enable globe + B&W imagery
   viewer.scene.globe.show = true;
   try {
     const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
@@ -256,14 +262,19 @@ let currentMuni = 'Irvington';
   } catch (e) {
     console.log('Using default ellipsoid terrain');
   }
+
   // Stamen Toner B&W imagery as greyscale base
-  const tonerProvider = new Cesium.UrlTemplateImageryProvider({
-    url: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
-    credit: 'Stamen Toner',
-    maximumLevel: 18,
-  });
-  viewer.scene.imageryLayers.removeAll();
-  viewer.scene.imageryLayers.addImageryProvider(tonerProvider);
+  try {
+    const tonerProvider = new Cesium.UrlTemplateImageryProvider({
+      url: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
+      credit: 'Stamen Toner',
+      maximumLevel: 18,
+    });
+    viewer.scene.imageryLayers.removeAll();
+    viewer.scene.imageryLayers.addImageryProvider(tonerProvider);
+  } catch (e) {
+    console.log('Toner imagery failed:', e);
+  }
 
   // Click handler for parcels
   viewer.screenSpaceEventHandler.setInputAction(function(click) {
@@ -279,13 +290,20 @@ let currentMuni = 'Irvington';
   // Fly to initial municipality
   flyToMuni('Irvington');
   loadParcels('Irvington');
-  
-  // Hide loading
+
+  // Hide loading early
+  clearTimeout(loadingTimeout);
   setTimeout(() => {
     const el = document.getElementById('loading');
-    el.style.opacity = '0';
-    setTimeout(() => el.style.display = 'none', 500);
+    if (el) { el.style.opacity = '0'; setTimeout(() => el.style.display = 'none', 500); }
   }, 2000);
+
+  } catch (err) {
+    console.error('Init failed:', err);
+    clearTimeout(loadingTimeout);
+    const el = document.getElementById('loading');
+    if (el) { el.innerHTML = '<div style="color:#FF6B6B">Error: ' + err.message + '</div>'; }
+  }
 })();
 
 // ============================================================================
