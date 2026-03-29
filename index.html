@@ -57,9 +57,18 @@
   }
   #mode-toggle:hover { background: rgba(50,50,50,0.9); }
   
+  /* Mode selector */
+  #mode-select {
+    position: absolute; top: 60px; left: 10px; z-index: 1000;
+    background: rgba(0,0,0,0.85); color: white; border: 1px solid #555;
+    border-radius: 6px; padding: 8px 12px; font-size: 13px;
+    outline: none; cursor: pointer;
+  }
+  #mode-select option { background: #222; }
+  
   /* Filter selector */
   #filter-select {
-    position: absolute; top: 60px; left: 310px; z-index: 1000;
+    position: absolute; top: 60px; left: 200px; z-index: 1000;
     background: rgba(0,0,0,0.85); color: white; border: 1px solid #555;
     border-radius: 6px; padding: 8px 12px; font-size: 13px;
     outline: none; cursor: pointer;
@@ -110,7 +119,11 @@
   <option value="Mount Vernon">Mount Vernon</option>
 </select>
 
-<button id="mode-toggle" onclick="toggleMode()">🍩 Dunkin' Mode</button>
+<select id="mode-select" onchange="setMode(this.value)">
+  <option value="lbcs">🏙️ LBCS Land Use</option>
+  <option value="dunkin">🍩 Dunkin' Suitability</option>
+  <option value="both">🔄 Both (LBCS + Dunkin')</option>
+</select>
 <select id="filter-select" onchange="applyFilter(this.value)">
   <option value="none">🎨 No Filter</option>
   <option value="noir">🖤 Noir</option>
@@ -483,10 +496,11 @@ function applyFilter(filterName) {
   }
   console.log('Filter applied:', filterName);
 }
-function toggleMode() {
-  dunkinMode = !dunkinMode;
-  const btn = document.getElementById('mode-toggle');
-  btn.textContent = dunkinMode ? '🏙️ LBCS Mode' : '🍩 Dunkin\' Mode';
+let currentMode = 'lbcs';
+
+function setMode(mode) {
+  currentMode = mode;
+  dunkinMode = (mode === 'dunkin' || mode === 'both');
   loadParcels(currentMuni);
 }
 
@@ -569,18 +583,29 @@ async function loadParcels(muni) {
       const score = scoreDunkin(props);
       
       let color;
-      if (dunkinMode) {
+      if (currentMode === 'dunkin') {
         if (score >= 70) color = '#FF2222';
         else if (score >= 40) color = '#FFB347';
         else if (pc.startsWith('4') || pc.startsWith('6')) color = '#FF6666';
         else color = '#66666688';
-      } else {
+      } else if (currentMode === 'both') {
+        // LBCS colors, but Dunkin' prime gets extra brightness
         const lbcsMap = {
-          '1000': '#FFFF00AA', '2000': '#FF4444CC', '3000': '#A020F0AA',
-          '4000': '#4444FFAA', '5000': '#BEBEBE88', '7000': '#90EE90AA',
-          '8000': '#228B22AA', '9000': '#D3D3D366',
+          '1000': '#FFFF00', '2000': '#FF4444', '3000': '#A020F0',
+          '4000': '#4444FF', '5000': '#BEBEBE', '7000': '#90EE90',
+          '8000': '#228B22', '9000': '#D3D3D3',
         };
-        color = lbcsMap[lbcs] || '#99999988';
+        color = lbcsMap[lbcs] || '#999999';
+        // Boost prime Dunkin' sites
+        if (score >= 70) color = '#FF2222';
+      } else {
+        // LBCS only
+        const lbcsMap = {
+          '1000': '#FFFF00', '2000': '#FF4444', '3000': '#A020F0',
+          '4000': '#4444FF', '5000': '#BEBEBE', '7000': '#90EE90',
+          '8000': '#228B22', '9000': '#D3D3D3',
+        };
+        color = lbcsMap[lbcs] || '#999999';
       }
 
       return {
@@ -613,8 +638,9 @@ async function loadParcels(muni) {
         const score = props.DUNKIN_SCORE?.getValue() || 0;
         
         // Outline color based on mode/score
+        const pc = String(props.PROP_CLASS?.getValue() || '').trim();
         let outlineColor, outlineWidth;
-        if (dunkinMode) {
+        if (currentMode === 'dunkin' || currentMode === 'both') {
           if (score >= 70) {
             outlineColor = Cesium.Color.RED;
             outlineWidth = 3;
