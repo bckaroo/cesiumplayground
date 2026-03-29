@@ -251,7 +251,7 @@ let currentMuni = 'Irvington';
 
   try {
   viewer = new Cesium.Viewer('cesiumContainer', {
-    globe: false,
+    globe: true,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
     animation: false,
     timeline: false,
@@ -275,23 +275,20 @@ let currentMuni = 'Irvington';
     console.error('Failed to load 3D Tiles:', error);
   }
 
-  // Greyscale base: enable globe + B&W imagery
-  viewer.scene.globe.show = true;
+  // Greyscale base: B&W imagery on globe
   try {
     const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
     viewer.scene.terrainProvider = terrainProvider;
   } catch (e) {
     console.log('Using default ellipsoid terrain');
   }
-
-  // Stamen Toner B&W imagery as greyscale base
   try {
+    viewer.scene.imageryLayers.removeAll();
     const tonerProvider = new Cesium.UrlTemplateImageryProvider({
       url: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
       credit: 'Stamen Toner',
       maximumLevel: 18,
     });
-    viewer.scene.imageryLayers.removeAll();
     viewer.scene.imageryLayers.addImageryProvider(tonerProvider);
   } catch (e) {
     console.log('Toner imagery failed:', e);
