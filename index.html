@@ -263,13 +263,12 @@ let currentMuni = 'Irvington';
     vrButton: false,
   });
 
-  // Dark greyscale background (no globe needed)
+  // Dark background
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#1a1a2e');
 
-  // Add Google 3D Tiles
+  // Add Google 3D Tiles (50% transparent)
   try {
     const tileset = await Cesium.createGooglePhotorealistic3DTileset();
-    // 50% transparent
     tileset.style = new Cesium.Cesium3DTileStyle({
       color: "color('white', 0.5)"
     });
@@ -279,7 +278,20 @@ let currentMuni = 'Irvington';
     console.error('Failed to load 3D Tiles:', error);
   }
 
-  // No terrain/imagery — 3D tiles provide everything
+  // Terrain underneath (no imagery — just the mesh)
+  try {
+    const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
+    // Create a globe just for terrain, no imagery
+    const globe = new Cesium.Globe(viewer.scene.ellipsoid);
+    globe.terrainProvider = terrainProvider;
+    globe.showGroundAtmosphere = false;
+    globe.baseColor = Cesium.Color.fromCssColorString('#2a2a3e');
+    viewer.scene.globe = globe;
+    viewer.scene.globe.show = true;
+    console.log('Terrain loaded');
+  } catch (e) {
+    console.log('Terrain not available:', e.message);
+  }
 
   // Click handler for parcels
   viewer.screenSpaceEventHandler.setInputAction(function(click) {
