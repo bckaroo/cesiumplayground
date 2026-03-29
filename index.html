@@ -121,6 +121,7 @@
 
 <div id="layer-toggles" style="position:absolute;top:95px;left:10px;z-index:1000;background:rgba(0,0,0,0.85);color:white;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.8;">
   <label style="cursor:pointer;display:block;"><input type="checkbox" id="toggle-flood" onchange="toggleFlood(this.checked)"> 🌊 Flood Plains</label>
+  <label style="display:block;margin-top:4px;">🏗️ 3D Tiles: <input type="range" id="tiles-opacity" min="0" max="100" value="50" oninput="setTilesOpacity(this.value)" style="width:80px;vertical-align:middle;"> <span id="opacity-val">50%</span></label>
 </div>
 
 <select id="mode-select" onchange="setMode(this.value)">
@@ -255,6 +256,7 @@ function scoreDunkin(props) {
 let viewer, dataSource;
 let dunkinMode = false;
 let currentMuni = 'Irvington';
+let mainTileset = null;
 
 // ============================================================================
 // INIT
@@ -289,6 +291,7 @@ let currentMuni = 'Irvington';
     tileset.style = new Cesium.Cesium3DTileStyle({
       color: "color('white', 0.5)"
     });
+    mainTileset = tileset;
     viewer.scene.primitives.add(tileset);
     console.log('Google 3D Tiles loaded!');
   } catch (error) {
@@ -339,6 +342,19 @@ let currentMuni = 'Irvington';
     if (el) { el.innerHTML = '<div style="color:#FF6B6B">Error: ' + err.message + '</div>'; }
   }
 })();
+
+// ============================================================================
+// 3D TILES OPACITY
+// ============================================================================
+function setTilesOpacity(val) {
+  const opacity = val / 100;
+  document.getElementById('opacity-val').textContent = val + '%';
+  if (mainTileset) {
+    mainTileset.style = new Cesium.Cesium3DTileStyle({
+      color: "color('white', " + opacity + ")"
+    });
+  }
+}
 
 // ============================================================================
 // FLOOD PLAINS LAYER
