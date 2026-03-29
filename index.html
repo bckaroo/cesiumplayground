@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Westchester Parcels — 3D Viewer</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.128/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.128/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<style>
+  html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+  
+  /* Info panel */
+  #info-panel {
+    position: absolute; top: 60px; right: 10px; width: 300px;
+    background: rgba(0,0,0,0.85); color: white; border-radius: 10px;
+    padding: 16px; z-index: 1000; display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+  }
+  #info-panel h3 { margin: 0 0 10px 0; font-size: 15px; color: #FF6B6B; }
+  #info-panel .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 13px; }
+  #info-panel .label { color: #aaa; }
+  #info-panel .value { color: #fff; font-weight: 600; }
+  #info-panel .close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: #888; font-size: 18px; }
+  #info-panel .close:hover { color: #fff; }
+  
+  /* Title bar */
+  #title-bar {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); color: white; padding: 10px 24px;
+    border-radius: 10px; z-index: 1000; font-size: 16px; font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); text-align: center;
+  }
+  #title-bar small { font-weight: normal; font-size: 11px; color: #aaa; display: block; }
+  
+  /* Legend */
+  #legend {
+    position: absolute; bottom: 20px; left: 10px;
+    background: rgba(0,0,0,0.85); color: white; padding: 12px 16px;
+    border-radius: 8px; z-index: 1000; font-size: 12px; line-height: 1.8;
+  }
+  #legend .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  
+  /* Municipality selector */
+  #muni-select {
+    position: absolute; top: 60px; left: 10px; z-index: 1000;
+    background: rgba(0,0,0,0.85); color: white; border: 1px solid #555;
+    border-radius: 6px; padding: 8px 12px; font-size: 13px;
+    outline: none; cursor: pointer;
+  }
+  #muni-select option { background: #222; }
+  
+  /* Mode toggle */
+  #mode-toggle {
+    position: absolute; top: 60px; left: 180px; z-index: 1000;
+    background: rgba(0,0,0,0.85); color: white; border: 1px solid #555;
+    border-radius: 6px; padding: 8px 12px; font-size: 13px;
+    cursor: pointer;
+  }
+  #mode-toggle:hover { background: rgba(50,50,50,0.9); }
+  
+  /* Loading overlay */
+  #loading {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: #1a1a2e; z-index: 9999; display: flex; align-items: center;
+    justify-content: center; flex-direction: column; color: white;
+    font-size: 18px; transition: opacity 0.5s;
+  }
+  #loading .spinner {
+    width: 40px; height: 40px; border: 3px solid #333;
+    border-top-color: #FF6B6B; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Cesium overrides */
+  .cesium-viewer-bottom { display: none !important; }
+  .cesium-viewer-toolbar { top: 100px !important; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div>Loading 3D Tiles...</div>
+</div>
+
+<div id="title-bar">
+  Westchester County Parcels — 3D Viewer
+  <small>Google Photorealistic 3D Tiles + Parcel Overlay</small>
+</div>
+
+<select id="muni-select">
+  <option value="Scarsdale">Scarsdale</option>
+  <option value="Irvington">Irvington</option>
+  <option value="Yonkers">Yonkers</option>
+  <option value="White Plains">White Plains</option>
+  <option value="New Rochelle">New Rochelle</option>
+  <option value="Bedford">Bedford</option>
+  <option value="Harrison">Harrison</option>
+  <option value="Rye">Rye</option>
+  <option value="Mamaroneck">Mamaroneck</option>
+  <option value="Mount Vernon">Mount Vernon</option>
+</select>
+
+<button id="mode-toggle" onclick="toggleMode()">🍩 Dunkin' Mode</button>
+
+<div id="cesiumContainer"></div>
+
+<div id="info-panel">
+  <span class="close" onclick="document.getElementById('info-panel').style.display='none'">✕</span>
+  <h3 id="info-title">Parcel Info</h3>
+  <div class="row"><span class="label">Address</span><span class="value" id="info-addr">—</span></div>
+  <div class="row"><span class="label">Owner</span><span class="value" id="info-owner">—</span></div>
+  <div class="row"><span class="label">Property Class</span><span class="value" id="info-class">—</span></div>
+  <div class="row"><span class="label">LBCS Category</span><span class="value" id="info-lbcs">—</span></div>
+  <div class="row"><span class="label">Acres</span><span class="value" id="info-acres">—</span></div>
+  <div class="row"><span class="label">Total AV</span><span class="value" id="info-av">—</span></div>
+  <div class="row"><span class="label">Year Built</span><span class="value" id="info-year">—</span></div>
+  <div class="row"><span class="label">Dunkin' Score</span><span class="value" id="info-score">—</span></div>
+</div>
+
+<div id="legend">
+  <div><span class="swatch" style="background:#FF2222"></span>PRIME Dunkin' Site</div>
+  <div><span class="swatch" style="background:#FFB347"></span>Suitable</div>
+  <div><span class="swatch" style="background:#FF6666"></span>Commercial</div>
+  <div><span class="swatch" style="background:#FFFF00"></span>Residential (LBCS 1000)</div>
+  <div><span class="swatch" style="background:#90EE90"></span>Recreation (LBCS 7000)</div>
+  <div><span class="swatch" style="background:#A020F0"></span>Industrial (LBCS 3000)</div>
+</div>
+
+<script>
+// ============================================================================
+// CONFIG
+// ============================================================================
+Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI1MzI4MTY4Yy1jYzkzLTQxYjYtOTdjYi1mOGZiZjQ0ZmJmZjEiLCJpZCI6ODkyOTcsImlhdCI6MTc3NDc1MTU3NX0.Sg_fkegpUCCpWYko2X-j26lwnl7_2Gbr0EXcoLAqxIQ";
+
+const ARC_GIS_URL = "https://services6.arcgis.com/EbVsqZ18sv1kVJ3k/arcgis/rest/services/Westchester_County_Parcels/FeatureServer/0/query";
+const PAGE_SIZE = 1000;
+
+// Municipalities with approximate centers
+const MUNI_CENTERS = {
+  "Scarsdale":     { lon: -73.783, lat: 40.990, height: 3000 },
+  "Irvington":     { lon: -73.868, lat: 41.037, height: 3000 },
+  "Yonkers":       { lon: -73.858, lat: 40.942, height: 6000 },
+  "White Plains":  { lon: -73.763, lat: 41.034, height: 4000 },
+  "New Rochelle":  { lon: -73.783, lat: 40.912, height: 4000 },
+  "Bedford":       { lon: -73.657, lat: 41.204, height: 6000 },
+  "Harrison":      { lon: -73.713, lat: 40.969, height: 4000 },
+  "Rye":           { lon: -73.686, lat: 40.981, height: 4000 },
+  "Mamaroneck":    { lon: -73.734, lat: 40.950, height: 4000 },
+  "Mount Vernon":  { lon: -73.833, lat: 40.913, height: 4000 },
+};
+
+// LBCS Activity colors
+const LBCS_COLORS = {
+  '1000': Cesium.Color.fromCssColorString('#FFFF00').withAlpha(0.5),   // Residential
+  '2000': Cesium.Color.fromCssColorString('#FF4444').withAlpha(0.6),   // Commercial
+  '3000': Cesium.Color.fromCssColorString('#A020F0').withAlpha(0.5),   // Industrial
+  '4000': Cesium.Color.fromCssColorString('#4444FF').withAlpha(0.5),   // Institutional
+  '5000': Cesium.Color.fromCssColorString('#BEBEBE').withAlpha(0.4),   // Transportation
+  '7000': Cesium.Color.fromCssColorString('#90EE90').withAlpha(0.5),   // Recreation
+  '8000': Cesium.Color.fromCssColorString('#228B22').withAlpha(0.5),   // Conservation
+  '9000': Cesium.Color.fromCssColorString('#D3D3D3').withAlpha(0.3),   // Vacant
+};
+
+// Dunkin' suitability
+const IDEAL_CLASSES = new Set([
+  '430','432','440','441','442','443','449','450','451','452','453',
+  '460','461','462','477','478','479','482','483','484','487','488','489'
+]);
+const SECONDARY_CLASSES = new Set([
+  '411','412','414','415','416','417','418','420','431','434','435','436','437',
+  '464','465','470','471','472','473','474','480','481'
+]);
+const MAJOR_ROADS = [
+  'BROADWAY','MAIN ST','CENTRAL AVE','TARRYTOWN RD','WHITE PLAINS RD',
+  'BOSTON POST RD','ROUTE','SAW MILL','HUTCHINSON','CROSS','HILLSDALE',
+  'KING ST','MAMARONECK AVE','TUCKAHOE RD','SCARSDALE AVE','EASTCHESTER',
+  'NEPPERHAN','YONKERS AVE','WARBURTON AVE','PROSPECT AVE','RIDGE'
+];
+
+// LBCS mapping
+function mapRpsvToLbcs(pc) {
+  if (!pc) return '9000';
+  const c = String(pc).trim();
+  if (c.startsWith('1')) return '8000';
+  if (c.startsWith('2')) return '1000';
+  if (c.startsWith('3')) return '9000';
+  if (c.startsWith('4')) return '2000';
+  if (c.startsWith('5')) return '7000';
+  if (c.startsWith('6')) return c >= '610' && c <= '699' ? '2000' : '4000';
+  if (c.startsWith('7')) return '3000';
+  if (c.startsWith('8')) return '4000';
+  if (c.startsWith('9')) return '7000';
+  return '9000';
+}
+
+function scoreDunkin(props) {
+  const pc = String(props.PROP_CLASS || '').trim();
+  const acres = parseFloat(props.ACRES) || 0;
+  const street = String(props.LOC_STREET || '').toUpperCase();
+  let score = 0;
+  if (IDEAL_CLASSES.has(pc)) score += 40;
+  else if (SECONDARY_CLASSES.has(pc)) score += 20;
+  else if (pc.startsWith('4') || pc.startsWith('6')) score += 10;
+  else return 0;
+  if (acres >= 0.08 && acres <= 0.8) score += 30;
+  else if (acres >= 0.05 && acres <= 1.5) score += 15;
+  else if (acres > 1.5) score += 5;
+  if (MAJOR_ROADS.some(r => street.includes(r))) score += 30;
+  else if (street) score += 10;
+  return score;
+}
+
+// ============================================================================
+// STATE
+// ============================================================================
+let viewer, dataSource;
+let dunkinMode = false;
+let currentMuni = 'Irvington';
+
+// ============================================================================
+// INIT
+// ============================================================================
+(async function init() {
+  viewer = new Cesium.Viewer('cesiumContainer', {
+    globe: false,
+    geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
+    animation: false,
+    timeline: false,
+    baseLayerPicker: false,
+    navigationHelpButton: false,
+    homeButton: false,
+    sceneModePicker: false,
+    fullscreenButton: false,
+    vrButton: false,
+  });
+
+  // Add Google 3D Tiles
+  try {
+    const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+    viewer.scene.primitives.add(tileset);
+    console.log('Google 3D Tiles loaded!');
+  } catch (error) {
+    console.error('Failed to load 3D Tiles:', error);
+  }
+
+  // Click handler for parcels
+  viewer.screenSpaceEventHandler.setInputAction(function(click) {
+    const picked = viewer.scene.pick(click.position);
+    if (Cesium.defined(picked) && picked.id) {
+      const props = picked.id.properties;
+      if (props) {
+        showInfoPanel(props);
+      }
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  // Fly to initial municipality
+  flyToMuni('Irvington');
+  loadParcels('Irvington');
+  
+  // Hide loading
+  setTimeout(() => {
+    const el = document.getElementById('loading');
+    el.style.opacity = '0';
+    setTimeout(() => el.style.display = 'none', 500);
+  }, 2000);
+})();
+
+// ============================================================================
+// MUNICIPALITY SELECTOR
+// ============================================================================
+document.getElementById('muni-select').addEventListener('change', function() {
+  currentMuni = this.value;
+  flyToMuni(currentMuni);
+  loadParcels(currentMuni);
+});
+
+function flyToMuni(muni) {
+  const c = MUNI_CENTERS[muni] || MUNI_CENTERS['Scarsdale'];
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, c.height),
+    orientation: { heading: Cesium.Math.toRadians(-30), pitch: Cesium.Math.toRadians(-45), roll: 0 },
+    duration: 2.0,
+  });
+}
+
+// ============================================================================
+// DUNKIN' MODE TOGGLE
+// ============================================================================
+function toggleMode() {
+  dunkinMode = !dunkinMode;
+  const btn = document.getElementById('mode-toggle');
+  btn.textContent = dunkinMode ? '🏙️ LBCS Mode' : '🍩 Dunkin\' Mode';
+  loadParcels(currentMuni);
+}
+
+// ============================================================================
+// LOAD PARCELS (optimized - filters before loading)
+// ============================================================================
+let parcelCache = {};  // Cache fetched GeoJSON per municipality
+let currentDataSource = null;
+
+async function loadParcels(muni) {
+  // Remove existing parcels
+  if (currentDataSource) {
+    viewer.dataSources.remove(currentDataSource);
+    currentDataSource = null;
+  }
+
+  console.log(`Loading ${muni} parcels...`);
+
+  // Fetch or use cached
+  if (!parcelCache[muni]) {
+    const allFeatures = [];
+    let offset = 0;
+    while (true) {
+      const url = `${ARC_GIS_URL}?where=MUNI_NAME='${encodeURIComponent(muni)}'&outFields=OBJECTID,MUNI_NAME,PARCEL_ADDR,PRIMARY_OWNER,PROP_CLASS,TOTAL_AV,LAND_AV,ACRES,YR_BLT,LOC_STREET,LOC_ST_NBR&returnGeometry=true&resultOffset=${offset}&resultRecordCount=${PAGE_SIZE}&f=geojson&orderByFields=OBJECTID`;
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const batch = data.features || [];
+        allFeatures.push(...batch);
+        console.log(`  Fetched ${batch.length} (total: ${allFeatures.length})`);
+        if (!data.properties?.exceededTransferLimit) break;
+        offset += PAGE_SIZE;
+        await new Promise(r => setTimeout(r, 200));
+      } catch (e) {
+        console.error('Fetch error:', e);
+        break;
+      }
+    }
+    parcelCache[muni] = allFeatures;
+  }
+
+  const allFeatures = parcelCache[muni];
+  console.log(`Cached: ${allFeatures.length} parcels`);
+
+  // FILTER: Only load parcels we care about (prevents stack overflow)
+  let filteredFeatures;
+  if (dunkinMode) {
+    // Dunkin' mode: only commercial parcels with scores
+    filteredFeatures = allFeatures.filter(f => {
+      const props = f.properties || {};
+      const pc = String(props.PROP_CLASS || '').trim();
+      return pc.startsWith('4') || pc.startsWith('6') || pc.startsWith('7');
+    });
+  } else {
+    // LBCS mode: load everything but skip tiny residential (keeps it under ~3K)
+    filteredFeatures = allFeatures.filter(f => {
+      const props = f.properties || {};
+      const acres = parseFloat(props.ACRES) || 0;
+      const pc = String(props.PROP_CLASS || '').trim();
+      // Skip tiny residential parcels (clutter) - keep parcels > 0.05 acres or non-residential
+      return acres > 0.05 || !pc.startsWith('2');
+    });
+  }
+
+  // Hard cap at 3000 to prevent stack overflow
+  if (filteredFeatures.length > 3000) {
+    console.log(`Capping from ${filteredFeatures.length} to 3000 (too many for WebGL)`);
+    filteredFeatures = filteredFeatures.slice(0, 3000);
+  }
+
+  console.log(`Rendering ${filteredFeatures.length} parcels`);
+
+  // Build GeoJSON with styling
+  const geojson = {
+    type: 'FeatureCollection',
+    features: filteredFeatures.map(f => {
+      const props = f.properties || {};
+      const pc = String(props.PROP_CLASS || '').trim();
+      const lbcs = mapRpsvToLbcs(pc);
+      const score = scoreDunkin(props);
+      
+      let color;
+      if (dunkinMode) {
+        if (score >= 70) color = '#FF2222';
+        else if (score >= 40) color = '#FFB347';
+        else if (pc.startsWith('4') || pc.startsWith('6')) color = '#FF6666';
+        else color = '#66666688';
+      } else {
+        const lbcsMap = {
+          '1000': '#FFFF00AA', '2000': '#FF4444CC', '3000': '#A020F0AA',
+          '4000': '#4444FFAA', '5000': '#BEBEBE88', '7000': '#90EE90AA',
+          '8000': '#228B22AA', '9000': '#D3D3D366',
+        };
+        color = lbcsMap[lbcs] || '#99999988';
+      }
+
+      return {
+        type: 'Feature',
+        geometry: f.geometry,
+        properties: {
+          ...props,
+          LBCS_CODE: lbcs,
+          DUNKIN_SCORE: score,
+          COLOR: color,
+        },
+      };
+    }),
+  };
+
+  // Load as Cesium data source with 3D Tile classification
+  try {
+    currentDataSource = await Cesium.GeoJsonDataSource.load(geojson, {
+      clampToGround: true,
+    });
+
+    // Style entities — classify onto 3D Tiles mesh
+    const entities = currentDataSource.entities.values;
+    for (const entity of entities) {
+      const props = entity.properties;
+      const colorHex = props.COLOR?.getValue() || '#999999';
+      const color = Cesium.Color.fromCssColorString(colorHex);
+      
+      if (entity.polygon) {
+        entity.polygon.material = color;
+        entity.polygon.outline = true;
+        entity.polygon.outlineColor = Cesium.Color.fromCssColorString('#222222').withAlpha(0.7);
+        entity.polygon.outlineWidth = 1.5;
+        // Key: classify on 3D Tiles, not just terrain
+        entity.polygon.classificationType = Cesium.ClassificationType.CESIUM_3D_TILE;
+        entity.polygon.height = undefined;  // Let it drape
+        entity.polygon.extrudedHeight = undefined;  // Flat on surface
+        
+        const score = props.DUNKIN_SCORE?.getValue() || 0;
+        if (dunkinMode && score >= 70) {
+          entity.polygon.outlineColor = Cesium.Color.RED;
+          entity.polygon.outlineWidth = 3;
+          // Slight extrusion for prime sites to pop
+          entity.polygon.extrudedHeight = Cesium.CallbackProperty.create(function(time, result) {
+            return 3;  // 3m above draped surface
+          }, false);
+        } else if (dunkinMode && score >= 40) {
+          entity.polygon.outlineColor = Cesium.Color.ORANGE;
+          entity.polygon.outlineWidth = 2;
+        }
+      }
+    }
+
+    viewer.dataSources.add(currentDataSource);
+    console.log(`Added ${entities.length} parcel entities`);
+  } catch (e) {
+    console.error('GeoJSON load error:', e);
+  }
+}
+
+// ============================================================================
+// INFO PANEL
+// ============================================================================
+function showInfoPanel(props) {
+  const panel = document.getElementById('info-panel');
+  const getVal = (key) => {
+    const v = props[key];
+    return (v && typeof v.getValue === 'function') ? v.getValue() : (v || '—');
+  };
+
+  const pc = String(getVal('PROP_CLASS'));
+  const lbcsCode = mapRpsvToLbcs(pc);
+  const lbcsNames = {
+    '1000': 'Residential', '2000': 'Commercial/Business', '3000': 'Industrial',
+    '4000': 'Institutional', '5000': 'Transportation', '7000': 'Recreation',
+    '8000': 'Conservation', '9000': 'Vacant',
+  };
+
+  document.getElementById('info-title').textContent = getVal('MUNI_NAME') || 'Parcel';
+  document.getElementById('info-addr').textContent = getVal('PARCEL_ADDR') || getVal('LOC_STREET');
+  document.getElementById('info-owner').textContent = getVal('PRIMARY_OWNER');
+  document.getElementById('info-class').textContent = pc;
+  document.getElementById('info-lbcs').textContent = lbcsNames[lbcsCode] || lbcsCode;
+  document.getElementById('info-acres').textContent = parseFloat(getVal('ACRES'))?.toFixed(2) + ' ac' || '—';
+  document.getElementById('info-av').textContent = '$' + Number(getVal('TOTAL_AV') || 0).toLocaleString();
+  document.getElementById('info-year').textContent = getVal('YR_BLT') || 'N/A';
+  
+  const score = getVal('DUNKIN_SCORE') || 0;
+  const scoreEl = document.getElementById('info-score');
+  scoreEl.textContent = score + (score >= 70 ? ' ⭐ PRIME' : score >= 40 ? ' ✓ Suitable' : '');
+  scoreEl.style.color = score >= 70 ? '#FF2222' : score >= 40 ? '#FFB347' : '#888';
+
+  panel.style.display = 'block';
+}
+</script>
+</body>
+</html>

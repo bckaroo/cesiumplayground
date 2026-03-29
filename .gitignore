@@ -1,0 +1,7 @@
+data/*.csv
+data/*.parquet
+*.pyc
+__pycache__/
+.venv/
+venv/
+node_modules/
