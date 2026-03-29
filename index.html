@@ -251,7 +251,7 @@ let currentMuni = 'Irvington';
 
   try {
   viewer = new Cesium.Viewer('cesiumContainer', {
-    globe: true,
+    globe: false,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
     animation: false,
     timeline: false,
@@ -263,36 +263,19 @@ let currentMuni = 'Irvington';
     vrButton: false,
   });
 
+  // Dark greyscale background (no globe needed)
+  viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#1a1a2e');
+
   // Add Google 3D Tiles
   try {
     const tileset = await Cesium.createGooglePhotorealistic3DTileset();
-    tileset.style = new Cesium.Cesium3DTileStyle({
-      color: "color('white', 0.5)"
-    });
     viewer.scene.primitives.add(tileset);
     console.log('Google 3D Tiles loaded!');
   } catch (error) {
     console.error('Failed to load 3D Tiles:', error);
   }
 
-  // Greyscale base: B&W imagery on globe
-  try {
-    const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
-    viewer.scene.terrainProvider = terrainProvider;
-  } catch (e) {
-    console.log('Using default ellipsoid terrain');
-  }
-  try {
-    viewer.scene.imageryLayers.removeAll();
-    const tonerProvider = new Cesium.UrlTemplateImageryProvider({
-      url: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
-      credit: 'Stamen Toner',
-      maximumLevel: 18,
-    });
-    viewer.scene.imageryLayers.addImageryProvider(tonerProvider);
-  } catch (e) {
-    console.log('Toner imagery failed:', e);
-  }
+  // No terrain/imagery — 3D tiles provide everything
 
   // Click handler for parcels
   viewer.screenSpaceEventHandler.setInputAction(function(click) {
