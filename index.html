@@ -371,9 +371,22 @@ async function toggleFlood(show) {
   if (show && !floodDataSource) {
     console.log('Loading flood plains...');
     try {
-      const resp = await fetch(FLOOD_URL);
-      const data = await resp.json();
-      floodDataSource = await Cesium.GeoJsonDataSource.load(data, {
+      // Paginate to get ALL flood zones (server max 1000/request)
+      let allFeatures = [];
+      let offset = 0;
+      while (true) {
+        const url = FLOOD_URL + '&resultOffset=' + offset + '&resultRecordCount=1000';
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const batch = data.features || [];
+        allFeatures.push(...batch);
+        console.log('  Flood offset', offset, ':', batch.length, '(total:', allFeatures.length, ')');
+        if (!data.properties?.exceededTransferLimit || batch.length === 0) break;
+        offset += 1000;
+        await new Promise(r => setTimeout(r, 200));
+      }
+      const fullGeojson = { type: 'FeatureCollection', features: allFeatures };
+      floodDataSource = await Cesium.GeoJsonDataSource.load(fullGeojson, {
         clampToGround: true,
       });
       const entities = floodDataSource.entities.values;
