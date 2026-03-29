@@ -415,26 +415,45 @@ async function loadParcels(muni) {
       const color = Cesium.Color.fromCssColorString(colorHex);
       
       if (entity.polygon) {
-        entity.polygon.material = color;
-        entity.polygon.outline = true;
-        entity.polygon.outlineColor = Cesium.Color.fromCssColorString('#222222').withAlpha(0.7);
-        entity.polygon.outlineWidth = 1.5;
-        // Key: classify on 3D Tiles, not just terrain
-        entity.polygon.classificationType = Cesium.ClassificationType.CESIUM_3D_TILE;
-        entity.polygon.height = undefined;  // Let it drape
-        entity.polygon.extrudedHeight = undefined;  // Flat on surface
-        
         const score = props.DUNKIN_SCORE?.getValue() || 0;
+        
+        // Outline color based on mode/score
+        let outlineColor, outlineWidth;
+        if (dunkinMode) {
+          if (score >= 70) {
+            outlineColor = Cesium.Color.RED;
+            outlineWidth = 3;
+          } else if (score >= 40) {
+            outlineColor = Cesium.Color.ORANGE;
+            outlineWidth = 2;
+          } else if (pc.startsWith('4') || pc.startsWith('6')) {
+            outlineColor = Cesium.Color.fromCssColorString('#FF6666');
+            outlineWidth = 1.5;
+          } else {
+            outlineColor = Cesium.Color.fromCssColorString('#888888');
+            outlineWidth = 0.5;
+          }
+        } else {
+          outlineColor = color.withAlpha(0.9);
+          outlineWidth = 1.2;
+        }
+
+        // Hatching with stripe material (transparent fill + stripes)
+        entity.polygon.material = new Cesium.StripeMaterialProperty({
+          evenColor: color.withAlpha(0.15),
+          oddColor: Cesium.Color.TRANSPARENT,
+          repeat: 8,
+          orientation: Cesium.StripeOrientation.DIAGONAL,
+        });
+        entity.polygon.outline = true;
+        entity.polygon.outlineColor = outlineColor;
+        entity.polygon.outlineWidth = outlineWidth;
+        entity.polygon.classificationType = Cesium.ClassificationType.CESIUM_3D_TILE;
+        entity.polygon.height = undefined;
+        entity.polygon.extrudedHeight = undefined;
+        
         if (dunkinMode && score >= 70) {
-          entity.polygon.outlineColor = Cesium.Color.RED;
-          entity.polygon.outlineWidth = 3;
-          // Slight extrusion for prime sites to pop
-          entity.polygon.extrudedHeight = Cesium.CallbackProperty.create(function(time, result) {
-            return 3;  // 3m above draped surface
-          }, false);
-        } else if (dunkinMode && score >= 40) {
-          entity.polygon.outlineColor = Cesium.Color.ORANGE;
-          entity.polygon.outlineWidth = 2;
+          entity.polygon.extrudedHeight = 3;
         }
       }
     }
