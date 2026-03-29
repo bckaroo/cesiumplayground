@@ -238,6 +238,10 @@ let currentMuni = 'Irvington';
   // Add Google 3D Tiles
   try {
     const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+    // Make 3D tiles 50% transparent so parcels show through
+    tileset.style = new Cesium.Cesium3DTileStyle({
+      color: "color('white', 0.5)"
+    });
     viewer.scene.primitives.add(tileset);
     console.log('Google 3D Tiles loaded!');
   } catch (error) {
